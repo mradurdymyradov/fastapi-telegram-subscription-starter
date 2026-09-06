@@ -1,0 +1,108 @@
+{$DOMAIN} {
+    encode gzip
+
+    # ── Security headers (defence in depth; backend also sets them) ────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "no-referrer"
+        Permissions-Policy        "geolocation=(), microphone=(), camera=()"
+        # Restrictive CSP for the Next.js admin UI. Next inlines a small
+        # bootstrap script per page, so 'unsafe-inline' is required for now.
+        # 'self' covers the admin and the /api proxy, which is the only
+        # origin we need to talk to.
+        Content-Security-Policy   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        # Hide the proxy itself from server fingerprinting probes.
+        -Server
+    }
+
+    # ── Admin UI on / ──────────────────────────────────────────────────
+    reverse_proxy admin:3000
+
+    # ── API and webhooks straight to FastAPI ───────────────────────────
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # Stripe / Lava callbacks. No path rewrite; FastAPI mounts these at root.
+    handle /webhooks/* {
+        # GK-404: cap anonymous webhook bodies before FastAPI buffers them, as
+        # defence in depth alongside the app-layer 413 guard. Sized above the
+        # documented Stripe/Lava payload bounds.
+        request_body {
+            max_size 1MB
+        }
+        reverse_proxy api:8000
+    }
+
+    # Telegram bot updates when BOT_UPDATE_MODE=webhook.
+    handle /tg-webhook/* {
+        reverse_proxy bot:8080
+    }
+
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+# ── GK-091 member portal (Vimeo-backed archive) ─────────────────────────
+# Separate site block on its own hostname so it can carry a relaxed referrer
+# policy + a Vimeo-aware CSP without loosening the admin posture above.
+# PORTAL_DOMAIN is set per-env (prod: community.example.com); it defaults
+# to portal.localhost so the Caddyfile stays valid before DNS exists (BLK-014).
+{$PORTAL_DOMAIN:portal.localhost} {
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        # CRITICAL (GK-090 §3.3): NOT "no-referrer". Vimeo domain-level embed
+        # privacy checks the Referer header against the whitelisted domains;
+        # no-referrer strips it and playback breaks. strict-origin sends only
+        # the origin (no path), so Vimeo allows the embed and we don't leak
+        # which video a member is watching.
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        Permissions-Policy        "geolocation=(), microphone=(), camera=()"
+        Content-Security-Policy   "default-src 'self'; script-src 'self' 'unsafe-inline' https://player.vimeo.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.vimeocdn.com https://*.vimeocdn.com; connect-src 'self' https://player.vimeo.com; frame-src https://player.vimeo.com; media-src https://player.vimeo.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        -Server
+    }
+
+    # API and webhooks straight to FastAPI (no path rewrite; FastAPI mounts at root).
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # Stripe / Lava callbacks on the public member domain.
+    handle /webhooks/* {
+        # GK-404: cap anonymous webhook bodies before FastAPI buffers them, as
+        # defence in depth alongside the app-layer 413 guard. Sized above the
+        # documented Stripe/Lava payload bounds.
+        request_body {
+            max_size 1MB
+        }
+        reverse_proxy api:8000
+    }
+
+    # Telegram bot updates can be pointed at the public portal domain too.
+    handle /tg-webhook/* {
+        reverse_proxy bot:8080
+    }
+
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    reverse_proxy portal:3001
+
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Caches and test outputs
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.log
+
+# Environments
+.env
+.env.local
+.env.*.local
+venv/
+.venv/
+ENV/
+
+# Node & Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Operating Systems & IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Backups
+*.bak
+*.swp
+*.age
+deploy/backup/age-identity.txt
+deploy/backup/*.sql.gz

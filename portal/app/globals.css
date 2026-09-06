@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Consumer surface: a calm, slightly deeper palette than the admin, but
+       sharing the green primary so brand stays consistent. */
+    --background: 240 20% 99%;
+    --foreground: 240 14% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 14% 10%;
+    --muted: 240 10% 95%;
+    --muted-foreground: 240 6% 42%;
+    --primary: 152 60% 36%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 152 45% 94%;
+    --accent-foreground: 152 60% 22%;
+    --border: 240 8% 90%;
+    --radius: 0.75rem;
+  }
+  .dark {
+    --background: 240 16% 6%;
+    --foreground: 0 0% 96%;
+    --card: 240 14% 9%;
+    --card-foreground: 0 0% 96%;
+    --muted: 240 10% 15%;
+    --muted-foreground: 240 6% 64%;
+    --primary: 152 56% 46%;
+    --primary-foreground: 240 14% 8%;
+    --accent: 240 12% 16%;
+    --accent-foreground: 0 0% 96%;
+    --border: 240 8% 18%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

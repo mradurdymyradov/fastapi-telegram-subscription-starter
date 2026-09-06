@@ -1,0 +1,20 @@
+# Local-only dev override (gitignored). Publishes the admin UI to the host so
+# you can open http://localhost:3000 in a browser without Caddy/SSL.
+# Next.js proxies /api/* to the api container internally (admin/next.config.js),
+# so exposing only admin:3000 is enough to exercise the whole panel locally.
+services:
+  admin:
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # GK-091: portal published at http://localhost:3001 for local browser testing.
+  # Its server components reach the API over the compose network (BACKEND_URL),
+  # and it proxies /api/* to the api container (portal/next.config.js), so the
+  # magic-link → session → archive flow works end-to-end without Caddy/SSL.
+  portal:
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      # Local plain-HTTP testing: don't mark the session cookie Secure, or some
+      # browsers drop it over http://localhost. Prod leaves this unset (Secure).
+      PORTAL_COOKIE_SECURE: "false"

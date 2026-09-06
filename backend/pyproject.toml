@@ -1,0 +1,70 @@
+[project]
+name = "membership_saas-backend"
+version = "0.1.0"
+description = "membership_saas: Telegram subscription bot + admin API"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.4,<4",
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.27,<1",
+    "sqlalchemy[asyncio]>=2.0.27,<3",
+    "alembic>=1.13,<2",
+    "asyncpg>=0.29,<1",
+    "psycopg2-binary>=2.9,<3",
+    "redis>=5.0,<6",
+    "pydantic[email]>=2.6,<3",
+    "pydantic-settings>=2.2,<3",
+    "python-jose[cryptography]>=3.3,<4",
+    "passlib[bcrypt]>=1.7.4,<2",
+    "bcrypt<4.1",
+    "python-multipart>=0.0.9,<1",
+    "stripe>=8.5,<10",
+    "httpx>=0.27,<1",
+    "openai>=1.14,<2",
+    "anthropic>=0.25,<1",
+    "apscheduler>=3.10,<4",
+    "structlog>=24.1,<25",
+    "python-dateutil>=2.9,<3",
+    # GK-040: Sentry SDK with the integrations used by api and bot.
+    # Pinned to a 1.x line because 2.x changed several integration APIs;
+    # we'll revisit during a separate maintenance task.
+    "sentry-sdk[fastapi,sqlalchemy,starlette]>=1.45,<2",
+    # GK-434.3: nothing here imports jinja2. Sentry's StarletteIntegration does,
+    # via starlette.templating, and the `[starlette]` extra above does not pull
+    # it — so every `api` start hit the ImportError fallback in
+    # `logging_setup._init_sentry` and re-initialised without
+    # StarletteIntegration/FastApiIntegration. Sentry still worked; API errors
+    # just arrived with no request context, no route, and a transaction name
+    # that made grouping useless. Pure Python, one small dependency
+    # (MarkupSafe), and nothing imports it at runtime unless the integration
+    # does — a cheaper price than triaging launch errors without a URL on them.
+    "jinja2>=3.1,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3,<1",
+    "pytest>=8.0,<9",
+    "pytest-asyncio>=0.23,<1",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests use explicit @pytest.mark.asyncio markers (strict mode catches any that
+# forget the marker instead of silently skipping them).
+asyncio_mode = "strict"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

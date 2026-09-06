@@ -1,0 +1,292 @@
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-membership_saas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-membership_saas}
+      POSTGRES_DB: ${POSTGRES_DB:-membership_saas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-membership_saas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    logging: *default-logging
+
+  seed:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "scripts.seed_demo"]
+    volumes:
+      - ../scripts:/app/scripts:ro
+    profiles: ["seed"]
+    restart: "no"
+    logging: *default-logging
+
+  # Backend test runner. Builds the `test` stage (pytest + suite baked in) so
+  # agents never hit "no pytest module" in the runtime image again. Tests are
+  # fully mocked (no DB/Redis needed). Run with:
+  #   docker compose -p membership_saas --profile test run --rm test
+  # Pass extra pytest args after the service name, e.g.
+  #   docker compose -p membership_saas --profile test run --rm test python -m pytest tests/test_fulfillment.py -q
+  test:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: test
+    env_file: .env
+    profiles: ["test"]
+    command: ["python", "-m", "pytest", "tests", "-q"]
+    restart: "no"
+    logging: *default-logging
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose: ["8000"]
+    restart: unless-stopped
+    logging: *default-logging
+    # GK-040: /health checks DB ping + bot heartbeat freshness and returns 503
+    # when either is unhealthy. start_period gives the bootstrap+ migrations
+    # time to settle before the first probe.
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()\" || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  bot:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.bot.main"]
+    expose: ["8080"]
+    restart: unless-stopped
+    logging: *default-logging
+
+  admin:
+    build:
+      context: ../admin
+      dockerfile: Dockerfile
+      # GK-041: browser Sentry config is inlined at build time (NEXT_PUBLIC_*).
+      # ADMIN_SENTRY_DSN keeps admin events in their own Sentry project, apart
+      # from the portal and the backend/bot. Empty values disable Sentry and
+      # leave source-map upload off. Interpolated from deploy/.env.
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${ADMIN_SENTRY_DSN:-}
+        NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${APP_ENV:-demo}
+        NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.0}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_ADMIN_PROJECT:-}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+    environment:
+      BACKEND_URL: http://api:8000
+      # GK-041: server-side (SSR) Sentry reads these at runtime.
+      SENTRY_DSN: ${ADMIN_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${APP_ENV:-demo}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.0}
+    depends_on: [api]
+    expose: ["3000"]
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        # Next.js standalone replies 200 on `/`; if the admin can't serve the
+        # login page, the container is unhealthy and Caddy should fall back.
+        # Use 127.0.0.1, NOT localhost: busybox wget resolves `localhost` to
+        # IPv6 ::1 while Next.js listens on IPv4 only, which made this probe
+        # report a false `unhealthy` even though the app served 200 (GK-040).
+        - "wget -q -O- http://127.0.0.1:3000/ >/dev/null || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # GK-091: member video portal (Vimeo-backed archive). Third Next.js app,
+  # separate from admin so it can carry its own relaxed referrer + Vimeo CSP
+  # (see Caddyfile portal block). Talks to the API over the compose network.
+  portal:
+    build:
+      context: ../portal
+      dockerfile: Dockerfile
+      # GK-041: same pattern as admin. PORTAL_SENTRY_DSN is a SEPARATE DSN so
+      # portal events land in their own Sentry project (not mixed with admin or
+      # backend/bot). NEXT_PUBLIC_* inlined at build; interpolated from deploy/.env.
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${PORTAL_SENTRY_DSN:-}
+        NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${APP_ENV:-demo}
+        NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.0}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PORTAL_PROJECT:-}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+    environment:
+      BACKEND_URL: http://api:8000
+      # Server components read this at request time to build the bot deep link.
+      NEXT_PUBLIC_BOT_USERNAME: ${BOT_USERNAME:-membership_bot}
+      # GK-041: server-side (SSR + middleware) Sentry reads these at runtime.
+      SENTRY_DSN: ${PORTAL_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${APP_ENV:-demo}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.0}
+    depends_on: [api]
+    expose: ["3001"]
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        # 127.0.0.1 not localhost — same busybox/Next IPv4 quirk as admin above.
+        - "wget -q -O- http://127.0.0.1:3001/ >/dev/null || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      # GK-091: portal hostname for the second site block. Defaults to
+      # portal.localhost so Caddy stays valid before prod DNS exists (BLK-014).
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:-portal.localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [admin, api, portal]
+
+  # GK-040: encrypted PostgreSQL backups to S3 / R2 / B2 via rclone.
+  # Disabled by default — enable in prod with: --profile backup
+  # The container loops on BACKUP_INTERVAL_SECONDS (default 24h).
+  backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    profiles: ["backup"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      # POSTGRES_USER/PASSWORD/DB come from .env via env_file.
+      # BACKUP_AGE_PUBLIC_KEY and BACKUP_RCLONE_REMOTE must also be in .env.
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backup_data:/var/backups/membership_saas
+      # rclone.conf holds the object-storage credentials, so it is gitignored
+      # and never travels in the release. On the server that matters twice
+      # over: `deploy.yml` rsyncs the checkout with `--delete` and carries
+      # forward only `.env`, so a config left inside the release tree is
+      # destroyed by the next deploy and backups stop **silently**. Prod
+      # therefore sets BACKUP_RCLONE_CONF to a path outside `releases/`
+      # (see deploy/.env.example). Locally the default points at the
+      # gitignored copy beside rclone.example.conf.
+      - ${BACKUP_RCLONE_CONF:-./backup/rclone.conf}:/home/backup/.config/rclone/rclone.conf:ro
+    restart: unless-stopped
+    logging: *default-logging
+
+  # GK-437: the restore canary. Same image, different entrypoint, and the only
+  # service that gets the age PRIVATE key — so the nightly dump writer never
+  # holds the key that opens every dump we have.
+  #
+  # It proves the claim that matters: not "the backup job succeeded" but "the
+  # newest backup was restorable as of X". Verdicts go into
+  # `backup_verifications`; the bot's daily job alerts on a failure, on
+  # staleness, and on this container never having run at all.
+  backup-verify:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    profiles: ["backup"]
+    env_file: .env
+    entrypoint: ["./verify-entrypoint.sh"]
+    environment:
+      POSTGRES_HOST: db
+      # Inside the container the identity is always at this path; the host-side
+      # location is BACKUP_AGE_IDENTITY_HOST_FILE, below. Splitting the two
+      # keeps the app-facing variable stable no matter where the key lives on
+      # a given machine.
+      BACKUP_AGE_IDENTITY_FILE: /run/secrets/age-identity.txt
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backup_data:/var/backups/membership_saas
+      # The age private key. Like rclone.conf this must live OUTSIDE the
+      # release tree on the server: `deploy.yml` rsyncs with `--delete`, so a
+      # key inside `releases/` is destroyed by the next deploy — and unlike a
+      # broken backup, a lost private key cannot be fixed after the fact,
+      # because every existing dump was encrypted to it.
+      - ${BACKUP_AGE_IDENTITY_HOST_FILE:-./backup/age-identity.txt}:/run/secrets/age-identity.txt:ro
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  backup_data:
