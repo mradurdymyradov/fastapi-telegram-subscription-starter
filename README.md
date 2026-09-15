@@ -2,6 +2,11 @@
 
 > Production-grade, full-stack architecture for subscription-based digital communities and membership SaaS. Built with an **18-router async FastAPI backend**, **PostgreSQL 16** (async SQLAlchemy 2 + Alembic), an **aiogram 3 Telegram bot**, and a **Next.js 14 admin dashboard**. Features an **idempotent payment fulfillment engine** supporting **Stripe recurring billing** and **on-chain USDT crypto verification**, with automated single-use invite generation and background access lifecycle enforcement.
 
+> [!NOTE]
+> **Production Proven:** This repository is the sanitized, open-source edition of an actively operated production platform (`pavel_community`) that processed **€1,648, ₽251,500, and $4,306** during its first 7 days of commercial launch. See the **[Production Case Study (CASE_STUDY.md)](./CASE_STUDY.md)** for architecture deep dives, commercial results, and operational breakdown.
+
+[![CI](https://github.com/mradurdymyradov/fastapi-telegram-subscription-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/mradurdymyradov/fastapi-telegram-subscription-starter/actions)
+[![Tests](https://img.shields.io/badge/Tests-929%20Passed-brightgreen)](tests)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://postgresql.org)
