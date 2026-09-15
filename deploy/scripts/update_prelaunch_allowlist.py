@@ -22,10 +22,10 @@ import stat
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 ALLOWLIST_KEY = b"PRELAUNCH_HOLD_ALLOWLIST"
 HOLD_KEY = b"ENABLE_PRELAUNCH_HOLD"
