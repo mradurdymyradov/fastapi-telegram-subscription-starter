@@ -39,3 +39,6 @@ Thumbs.db
 *.age
 deploy/backup/age-identity.txt
 deploy/backup/*.sql.gz
+
+*.egg-info/
+.venv/
