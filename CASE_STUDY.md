@@ -1,30 +1,32 @@
 ﻿# Production Case Study: Subscription Community & Billing Engine
 
-> **System Overview:** A production-grade membership management, billing, and automated access control platform built for a high-traffic creator community on Telegram. Processed multi-currency recurring subscriptions across Stripe and on-chain USDT crypto with zero double-charges and 100% automated membership lifecycle enforcement.
+> **System Overview:** A production-derived membership management, billing, and access-control platform for a creator community on Telegram. The system supports recurring and manual payment flows, on-chain USDT verification, and automated membership lifecycle operations.
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI_0.111-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![aiogram](https://img.shields.io/badge/Bot-aiogram_3.7-2CA5E0?logo=telegram)](https://docs.aiogram.dev)
 [![Next.js](https://img.shields.io/badge/Admin_%26_Portal-Next.js_14-black?logo=next.js)](https://nextjs.org)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL_16-336791?logo=postgresql)](https://postgresql.org)
-[![Tests](https://img.shields.io/badge/Test_Suite-929_Passed-success)](https://pytest.org)
+[![Tests](https://img.shields.io/badge/Tests-938_Backend_%2B_8_Deploy-success)](https://github.com/mradurdymyradov/fastapi-telegram-subscription-starter/actions)
 
 ---
 
 ## 1. Commercial Results & Operational Impact
 
-In its initial production launch week, the system operated under live traffic and processed payments across three distinct currencies:
+The product operator reported the following gross payment volume during the initial seven-day commercial-launch window:
 
-| Currency | Gross Volume Processed | Payment Rails | Automated Fulfillment Rate |
-| :--- | :--- | :--- | :---: |
-| **EUR (€)** | **€1,648** | Stripe Checkout (Credit/Debit Card) | 100% |
-| **RUB (₽)** | **₽251,500** | Alternative Payment Gateways | 100% |
-| **USD ($)** | **$4,306** | On-Chain USDT (Tron TRC-20 & Ethereum ERC-20) | 100% |
+| Currency | Operator-reported gross volume |
+| :--- | ---: |
+| **EUR (€)** | **€1,648** |
+| **RUB (₽)** | **₽251,500** |
+| **USD ($)** | **$4,306** |
 
-### Key Operational Metrics
-- **Zero Double Charges:** Idempotent payment processing with unique webhook event tracking and distributed lock guards.
-- **Automated Lifecycle Delivery:** 100% of verified payers received single-use Telegram channel and chat invites automatically within 5 seconds of confirmation.
-- **Automated Revocation:** Background cron workers scanned expired subscriptions, issued 3-day advance renewal prompts, and automatically removed delinquent members from private channels.
-- **Support Burden Reduction:** Automated magic-link login and self-service subscription management reduced manual operator access requests to zero.
+The amounts are retained in their original currencies and are not converted or summed into a synthetic total. They are operator-reported rather than independently audited. Redacted payment evidence can be shared privately when customer confidentiality permits.
+
+### Operational Scope
+- **Duplicate-risk controls:** Unique provider-event tracking, idempotency keys, database constraints, and distributed lock guards protect fulfillment paths from replay and concurrency errors.
+- **Automated delivery:** Verified payment events can generate time-limited Telegram channel and chat invitations without a manual grant step.
+- **Lifecycle enforcement:** Background workers identify expiring or expired subscriptions, send configured renewal notices, and revoke access after the applicable grace period.
+- **Self-service access:** Magic-link authentication and the member portal reduce routine operator work while preserving manual review paths for exceptions.
 
 ---
 
@@ -68,7 +70,7 @@ graph TD
 
 ### 1. Unified Idempotent Billing Engine
 - Unified `fulfill_payment()` entrypoint handles multiple disparate payment methods (Stripe subscriptions, on-chain crypto, and admin manual overrides).
-- Webhook events are checked against an internal idempotency ledger before state transitions occur, guaranteeing that network retries never generate duplicate subscription periods or excess invite tokens.
+- Webhook events are checked against an internal idempotency ledger before state transitions occur, reducing the risk that network retries create duplicate subscription periods or excess invite tokens.
 - On-chain crypto transactions are verified directly against TronGrid and Etherscan nodes, checking receiver address, exact amount, transaction age, and requiring 3 block confirmations before granting membership.
 
 ### 2. Autonomous Membership Lifecycle
@@ -82,30 +84,26 @@ graph TD
 - Role-based access control with TOTP-based Two-Factor Authentication (2FA).
 
 ### 4. Rigorous Test Suite
-- Comprehensive suite of **929 automated tests** covering router schemas, auth handlers, crypto verification, referral calculations, bot state machines, and webhook edge cases.
-- 100% mocked external dependencies allowing full test suite execution in CI environments in under 30 seconds without requiring external live databases.
+- **938 backend tests** cover router schemas, auth handlers, crypto verification, referral calculations, bot state machines, and webhook edge cases; **8 deployment-helper tests** cover operational scripts.
+- External services are mocked in the backend suite, which currently completes in CI without live payment, Telegram, database, or Redis credentials.
 
 ---
 
 ## 4. Role & AI-Assisted Engineering Workflow
 
-### What I Owned (Product & Architecture):
-- **Requirements & System Specification:** Scoped user journeys, payment flows, referral incentives, and admin moderation needs directly from community operator requirements.
-- **Architecture & Data Modeling:** Designed the database schema (28 tables), API router structure, authentication flows, and payment idempotency guarantees.
-- **Quality Assurance & Verification:** Formulated edge-case test scenarios (network drops, webhook replays, currency mismatch, expired tokens) and audited every test run.
-- **Deployment & Production Operations:** Configured Docker Compose environments, Caddy SSL reverse proxy, automated encrypted database backups, and monitored real-time payment events during launch week.
+### What I Owned (Product & Operations):
+- **Requirements and acceptance criteria:** Translated operator needs into user journeys, payment flows, referral rules, moderation controls, and testable outcomes.
+- **Architecture decisions:** Used AI coding agents to explore implementation options, then selected and validated the database, API, authentication, and idempotency approach against the product requirements.
+- **Quality assurance:** Defined edge cases such as network failures, webhook replays, currency mismatches, and expired tokens; ran the automated suites and reviewed failures before releases.
+- **Launch operations:** Coordinated Docker-based releases, SSL and backup configuration, production checks, and payment-event monitoring during the launch window.
 
 ### How AI Coding Agents Were Leveraged:
-Rather than writing every line of boilerplate by hand, I acted as an **AI systems architect and orchestrator**:
-- Used state-of-the-art AI coding agents (Claude Code, OpenAI Codex, and Antigravity) to accelerate implementation speed.
-- Provided strict architectural constraints, interface contracts, and schema boundaries to the agents.
-- Continuously validated generated code through automated test harnesses, type checking, and security audits.
-- Achieved a production-ready, enterprise-scale full-stack system in a fraction of traditional development time while maintaining 100% operational reliability.
+I do not claim to have hand-written the codebase. I used AI coding agents (Claude Code, OpenAI Codex, and Antigravity) for implementation while I supplied requirements, constraints, acceptance criteria, release decisions, and production feedback. Generated changes were evaluated through automated tests, type checking, clean builds, and operational checks before release.
 
 ---
 
 ## 5. Public vs. Private Edition Disclosure
 
-This repository is the sanitized, open-source edition of the live private production platform (`pavel_community`). 
-- **Preserved:** Complete backend architecture, 18 FastAPI async routers, bot state machine, full test suite (929 tests), admin and portal frontends, Docker deployment orchestration, and database migrations.
-- **Sanitized:** Proprietary client branding, live API tokens, real customer identifying information, and private production secrets have been replaced with standard templates and environment configurations.
+This repository is a sanitized, production-derived edition of the live private platform (`pavel_community`). It is intentionally not feature-parity with the private repository.
+- **Included:** The core 18-router FastAPI architecture, bot state machine, extensive automated tests, admin and portal frontends, Docker deployment structure, and representative database migrations.
+- **Omitted or generalized:** Client branding, secrets, customer data, current release tooling, recent production hardening, and client-specific workflows.

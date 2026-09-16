@@ -3,10 +3,10 @@
 > Production-grade, full-stack architecture for subscription-based digital communities and membership SaaS. Built with an **18-router async FastAPI backend**, **PostgreSQL 16** (async SQLAlchemy 2 + Alembic), an **aiogram 3 Telegram bot**, and a **Next.js 14 admin dashboard**. Features an **idempotent payment fulfillment engine** supporting **Stripe recurring billing** and **on-chain USDT crypto verification**, with automated single-use invite generation and background access lifecycle enforcement.
 
 > [!NOTE]
-> **Production Proven:** This repository is the sanitized, open-source edition of an actively operated production platform (`pavel_community`) that processed **€1,648, ₽251,500, and $4,306** during its first 7 days of commercial launch. See the **[Production Case Study (CASE_STUDY.md)](./CASE_STUDY.md)** for architecture deep dives, commercial results, and operational breakdown.
+> **Production-derived:** This repository is a sanitized open-source edition of an actively operated platform (`pavel_community`). The operator reported launch-week gross payment volume of **€1,648, ₽251,500, and $4,306** in the original currencies. These amounts are not converted or added together. See the **[Production Case Study](./CASE_STUDY.md)** for scope, evidence boundaries, architecture, and operating responsibilities.
 
 [![CI](https://github.com/mradurdymyradov/fastapi-telegram-subscription-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/mradurdymyradov/fastapi-telegram-subscription-starter/actions)
-[![Tests](https://img.shields.io/badge/Tests-929%20Passed-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/Tests-938%20Backend%20%2B%208%20Deploy-brightgreen)](tests)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://postgresql.org)
@@ -60,7 +60,7 @@ graph TD
 ### 2. 💳 Multi-Provider Idempotent Payment Engine
 - **Stripe Recurring Billing:** Handles checkout sessions, recurring customer charges, subscription upgrades/cancellations, and automated dispute tracking.
 - **On-Chain USDT Crypto Verification:** Native on-chain transaction parser verifying TRC20 (TronGrid) and ERC20 (Etherscan) transfers against recipient addresses with configurable block confirmation thresholds (default 3 confirmations).
-- **Single-Entrypoint Fulfillment:** Idempotent `fulfill_payment` handler guarantees zero duplicate grant triggers even during webhook retries or concurrent payment arrivals.
+- **Single-Entrypoint Fulfillment:** The `fulfill_payment` handler uses idempotency keys, event tracking, and locking to reduce duplicate entitlement risk during webhook retries or concurrent payment arrivals.
 - **Refund & Promo Logic:** Handles full and partial refunds with automatic referral commission recalculation and customizable promo code redemption limits.
 
 ### 3. 🤖 Autonomous Community Management Bot (`aiogram 3`)
