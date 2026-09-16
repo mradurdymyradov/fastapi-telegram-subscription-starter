@@ -9,7 +9,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 SCRIPT = Path(__file__).parents[1] / "scripts" / "update_prelaunch_allowlist.py"
 SPEC = importlib.util.spec_from_file_location("update_prelaunch_allowlist", SCRIPT)
 assert SPEC and SPEC.loader
